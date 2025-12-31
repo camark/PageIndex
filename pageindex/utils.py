@@ -89,23 +89,42 @@ def ChatGPT_API(model, prompt, api_key=CHATGPT_API_KEY, chat_history=None):
 async def ChatGPT_API_async(model, prompt, api_key=CHATGPT_API_KEY):
     max_retries = 10
     messages = [{"role": "user", "content": prompt}]
+
+    # ✨ 核心改动：根据模型名称自动切换 API 地址
+    base_url = None
+    if model and 'deepseek' in model.lower():
+        base_url = "https://api.deepseek.com"
+        # 优先使用 DeepSeek 专用 API Key
+        if api_key is None or api_key == CHATGPT_API_KEY:
+            api_key = os.getenv("DEEPSEEK_API_KEY", CHATGPT_API_KEY)
+
     for i in range(max_retries):
         try:
-            async with openai.AsyncOpenAI(api_key=api_key) as client:
-                response = await client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    temperature=0,
-                )
-                return response.choices[0].message.content
+            # ✨ 灵活切换客户端
+            if base_url:
+                async with openai.AsyncOpenAI(api_key=api_key, base_url=base_url) as client:
+                    response = await client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        temperature=0,
+                    )
+                    return response.choices[0].message.content
+            else:
+                async with openai.AsyncOpenAI(api_key=api_key) as client:
+                    response = await client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        temperature=0,
+                    )
+                    return response.choices[0].message.content
         except Exception as e:
             print('************* Retrying *************')
             logging.error(f"Error: {e}")
             if i < max_retries - 1:
-                await asyncio.sleep(1)  # Wait for 1s before retrying
+                await asyncio.sleep(1)
             else:
                 logging.error('Max retries reached for prompt: ' + prompt)
-                return "Error"  
+                return "Error"
             
             
 def get_json_content(response):
